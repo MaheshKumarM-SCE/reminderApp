@@ -1,83 +1,54 @@
 import 'dart:io';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:flutter/material.dart';
-import 'package:awesome_notifications/awesome_notifications.dart';
-import 'package:notification_permissions/notification_permissions.dart';
-import 'package:reminder_app/utils/utils.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 
-Future<dynamic> myBackgroundMessageHandler(RemoteMessage message) async {
-  if (message != null) print(message);
-}
+import 'package:reminder_app/utils/utils.dart';
+import 'package:reminder_app/utils/firebase_utils.dart';
+
+import 'package:awesome_notifications/awesome_notifications.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({Key key}) : super(key: key);
+  const HomePage({Key? key}) : super(key: key);
   @override
   _HomePageState createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  TimeOfDay _pickedTime;
-  FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
-  NotificationSettings _iosNotificationSettings;
+  TimeOfDay? _pickedTime;
+
   @override
   void initState() {
     super.initState();
-    initFirebase().then((value) => _initNotification());
+
+    WidgetsBinding.instance!.addPostFrameCallback((_) async {
+      requestNotificationPermission();
+      FirebaseUtils.initializeFirebaseService(context);
+      _startListenAwesomeStreams();
+    });
   }
 
-  ///Initialize firebase
-  Future<void> initFirebase() async {
-    if (Platform.isIOS) {
-      _iosNotificationSettings = await _firebaseMessaging.requestPermission(
-        alert: true,
-        announcement: false,
-        badge: true,
-        carPlay: false,
-        criticalAlert: false,
-        provisional: true,
-        sound: true,
-      );
+  Future<bool> requestNotificationPermission() async {
+    bool isAllowed = await AwesomeNotifications().isNotificationAllowed();
+    if (!isAllowed) {
+      await showRequestUserPermissionDialog(context);
+      isAllowed = await AwesomeNotifications().isNotificationAllowed();
     }
-    _firebaseMessaging.getToken().then((String token) {
-      if (token != null) {
-        print(token);
-      }
-    });
-    handleIncomingFirebaseNotification();
+    return isAllowed;
   }
 
-  void handleIncomingFirebaseNotification() {
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      if (message != null) print(message);
-    });
-    FirebaseMessaging.instance
-        .getInitialMessage()
-        .then((RemoteMessage message) {
-      if (message != null) print(message);
-    });
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      if (message != null) print(message);
-    });
-    FirebaseMessaging.onBackgroundMessage(myBackgroundMessageHandler);
-  }
-
-  _initNotification() async {
-    await NotificationPermissions.requestNotificationPermissions(
-        iosSettings: const NotificationSettingsIos(
-            sound: true, badge: true, alert: true));
+  _startListenAwesomeStreams() async {
     AwesomeNotifications().actionStream.listen((receivedNotification) {
-      Navigator.pushNamed(context, "/notification_received_page");
       Fluttertoast.showToast(
-          msg:
-              'Msg: ${StringUtils.isNullOrEmpty(receivedNotification.buttonKeyPressed, considerWhiteSpaceAsEmpty: true) ? 'normal tap' : receivedNotification.buttonKeyPressed}',
+          msg: 'Msg: ${StringUtils.isNullOrEmpty(receivedNotification.buttonKeyPressed, considerWhiteSpaceAsEmpty: true) ? 'normal tap' : receivedNotification.buttonKeyPressed}',
           backgroundColor: Colors.blue[200],
           textColor: Colors.black);
+
+      processDefaultActionReceived(context, receivedNotification);
     });
   }
 
   Future<bool> pickScheduleDate(BuildContext context) async {
-    TimeOfDay timeOfDay;
+    TimeOfDay? timeOfDay;
     timeOfDay = await showTimePicker(
       context: context,
       initialTime: _pickedTime ?? TimeOfDay.now(),
@@ -104,6 +75,12 @@ class _HomePageState extends State<HomePage> {
         _dateTime,
       );
     });
+  }
+
+  @override
+  void dispose() {
+    AwesomeNotifications().dispose();
+    super.dispose();
   }
 
   @override
@@ -137,8 +114,6 @@ class _HomePageState extends State<HomePage> {
               child: Container(
                 child: Image.asset(
                   'assets/sleep.jpeg',
-                  // width: MediaQuery.of(context).size.width * 0.6,
-                  // height: MediaQuery.of(context).size.height * 0.23,
                 ),
               ),
             ),
@@ -169,9 +144,11 @@ class _HomePageState extends State<HomePage> {
                   ),
                   ElevatedButton(
                     onPressed: () async {
-                      if (await pickScheduleDate(context) &&
-                          _pickedTime != null) {
-                        await scheduleSleepReminder(_pickedTime);
+                      if(await requestNotificationPermission()){
+                        if (await pickScheduleDate(context) &&
+                            _pickedTime != null) {
+                          await scheduleSleepReminder(_pickedTime!);
+                        }
                       }
                     },
                     child: Text(
@@ -179,6 +156,22 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                 ],
+              ),
+            ),
+            Container(
+              alignment: Alignment.center,
+              padding: EdgeInsets.only(
+                bottom: size.height * 0.02,
+                left: size.width * 0.05,
+                right: size.width * 0.05,
+              ),
+              child: TextButton(
+                onPressed: () async {
+                  showRequestUserPermissionDialog(context);
+                },
+                child: Text(
+                  'Show notification request',
+                ),
               ),
             ),
             Container(

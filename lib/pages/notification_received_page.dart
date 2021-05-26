@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
 
 class NotificationReceivedPage extends StatelessWidget {
-  const NotificationReceivedPage({Key key}) : super(key: key);
+  const NotificationReceivedPage(this.receivedNotification, {Key? key}) : super(key: key);
+
+  final ReceivedNotification receivedNotification;
 
   @override
   Widget build(BuildContext context) {

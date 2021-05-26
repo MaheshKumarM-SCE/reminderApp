@@ -6,6 +6,7 @@ import 'package:awesome_notifications/awesome_notifications.dart' as Utils
     show DateUtils;
 import 'package:flutter/material.dart';
 import 'package:reminder_app/constants.dart';
+import 'package:reminder_app/routes/routes.dart';
 
 Future<bool> showNotificationWithActionButtons(
     int id, DateTime scheduleTime) async {
@@ -17,14 +18,11 @@ Future<bool> showNotificationWithActionButtons(
           body: 'Sleep early. Stay healthy.',
           payload: {'uuid': 'user-profile-uuid'}),
       schedule: NotificationCalendar(
-          // weekday: Platform.isIOS
-          //     ? scheduleTime.weekday
-          //     : scheduleTime.toUtc().weekday,
           timeZone: await AwesomeNotifications().getLocalTimeZoneIdentifier(),
-          allowWhileIdle: true,
           hour: scheduleTime.hour,
           minute: scheduleTime.minute,
           second: 0,
+          allowWhileIdle: true,
           repeats: true),
       actionButtons: [
         NotificationActionButton(
@@ -40,7 +38,7 @@ Future<bool> showNotificationWithActionButtons(
       ]);
 }
 
-Future<bool> showNotificationAtScheduleCron(int id, DateTime scheduleTime) {
+Future<bool> showNotificationAtScheduleCron(int id, DateTime scheduleTime) async {
   return AwesomeNotifications().createNotification(
       content: NotificationContent(
         id: id,
@@ -57,16 +55,14 @@ Future<bool> showNotificationAtScheduleCron(int id, DateTime scheduleTime) {
         autoCancel: false,
       ),
       schedule: NotificationCalendar(
-          weekday: Platform.isIOS
-              ? scheduleTime.weekday
-              : scheduleTime.toUtc().weekday,
-          allowWhileIdle: true,
-          hour: Platform.isIOS ? scheduleTime.hour : scheduleTime.toUtc().hour,
-          minute: Platform.isIOS
-              ? scheduleTime.minute
-              : scheduleTime.toUtc().minute,
+          timeZone: await AwesomeNotifications().getLocalTimeZoneIdentifier(),
+          weekday: scheduleTime.weekday,
+          hour: scheduleTime.hour,
+          minute: scheduleTime.minute,
           second: 0,
-          repeats: true));
+          allowWhileIdle: true,
+          repeats: true
+      ));
 }
 
 Future<void> listScheduledNotifications(BuildContext context) async {
@@ -74,7 +70,7 @@ Future<void> listScheduledNotifications(BuildContext context) async {
       await AwesomeNotifications().listScheduledNotifications();
   for (PushNotification schedule in activeSchedules) {
     debugPrint(
-        'pending notification: [id: ${schedule.content.id}, title: ${schedule.content.titleWithoutHtml}, schedule: ${schedule.schedule.toString()}]');
+        'pending notification: [id: ${schedule.content!.id}, title: ${schedule.content!.titleWithoutHtml}, schedule: ${schedule.schedule.toString()}]');
   }
   return showDialog<void>(
     context: context,
@@ -96,4 +92,57 @@ Future<void> listScheduledNotifications(BuildContext context) async {
 
 Future<void> cancelAllSchedules() async {
   await AwesomeNotifications().cancelAllSchedules();
+}
+
+Future<void> showRequestUserPermissionDialog(BuildContext context) async {
+  return showDialog<void>(
+    context: context,
+    builder: (_) =>
+        AlertDialog(
+          backgroundColor: Color(0xfffbfbfb),
+          title: Text('Get Notified!',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 22.0, fontWeight: FontWeight.w600)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset(
+                'assets/animated-bell.gif',
+                height: 200,
+                fit: BoxFit.fitWidth,
+              ),
+              Text(
+                'Please, you need to allow our notifications to receive alerts',
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              style: TextButton.styleFrom(backgroundColor: Colors.grey),
+              onPressed: () async {
+                Navigator.of(context).pop();
+              },
+              child: Text('Later', style: TextStyle(color: Colors.white)),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(backgroundColor: Colors.deepPurple),
+              onPressed: () async {
+                await AwesomeNotifications()
+                    .requestPermissionToSendNotifications();
+                Navigator.of(context).pop();
+              },
+              child: Text('Allow', style: TextStyle(color: Colors.white)),
+            )
+          ],
+        ),
+  );
+}
+
+void processDefaultActionReceived(BuildContext context, ReceivedAction receivedNotification) {
+
+  // Avoid to open the notification details page over another details page already opened
+  Navigator.pushNamedAndRemoveUntil(context, PAGE_NOTIFICATION_RECEIVED,
+          (route) => (route.settings.name != PAGE_NOTIFICATION_RECEIVED) || route.isFirst,
+      arguments: receivedNotification);
 }
